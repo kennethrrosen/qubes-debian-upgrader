@@ -10,3 +10,16 @@ The script begins by asking the user for the name of the template they want to u
 The script then performs an initial upgrade and handles the distro-sync process. The script creates a cache block to prevent exiting over a "No space left on device" error.
 
 Finally, after the upgrade is successful, it cleans up the expect package, performs additional updates and upgrades, and shuts down the template. Note: disk drimming is skipped as it should no longer be necessary.
+
+### Usage
+
+To use this script, copy to dom0 (check the script first) and then you've two options, one for single template upgrade and one for multiple template upgrades:
+
+For single templates, run the below and you'll be prompted for the desired template:
+```
+./deb_upgrader.sh
+```
+
+```
+./deb_upgrader.sh template1 template2 template3
+```
