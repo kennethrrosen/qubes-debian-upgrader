@@ -1,8 +1,6 @@
 # qubes-debian-upgrader
 Simple dom0 bash script to streamline updating Debian templates to latest releases
 
-Simple dom0 bash script to streamline updating Debian templates to latest releases
-
 The script follows the procedure of in-place upgrading for an installed Debian Template in your Qubes system. If you wish to install a new, unmodified Debian template instead of upgrading a template that's already installed in your system, just issue qvm-template install debian-XX or qvm-template install debian-XX-minimal
 
 The script begins by asking the user for the name of the template they want to upgrade. Then it checks if that template exists. If it does, the script extracts the current version of the Debian release from the template and prompts the user if they wish to proceed with the upgrade. If the user agrees, the script then calculates the new version number and asks if the user wants to clone the template before upgrading. The user can choose to clone the template and provide a new name, or proceed with upgrading the original template.
