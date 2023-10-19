@@ -79,3 +79,11 @@ else
     message "Usage: $0"
     exit 1
 fi
+
+
+if [ $# -eq 0 ]; then
+	cat >&2 <<-EOF
+	Usage: ${0##*/} [options] -t 
+	...
+	EOF
+fi
