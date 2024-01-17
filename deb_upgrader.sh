@@ -38,7 +38,7 @@ upgrade_template() {
     fi
     
     message "Upgrading $new_template_name"
-    qvm-run -a $new_template_name gnome-terminal
+    qvm-start $new_template_name
     
     message "Updating APT repositories..."
     qvm-run -p $new_template_name "sudo sed -i 's/$old_name/$new_name/g' /etc/apt/sources.list"
