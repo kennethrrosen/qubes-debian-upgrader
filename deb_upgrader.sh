@@ -56,6 +56,8 @@ upgrade_template() {
     
     message "Shutting down $new_template_name"
     qvm-shutdown $new_template_name
+    
+    qvm-features $new_template_name template-name $new_template_name
 }
 
 prompt_user() {
