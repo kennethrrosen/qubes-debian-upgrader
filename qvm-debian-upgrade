@@ -1,0 +1,182 @@
+#!/bin/bash
+#
+# Qubes OS Debian Template Upgrade Script
+# Supports Debian 12 "Bookworm", Debian 13 "Trixie", and future releases
+#
+# Copyright (C) 2024 by Kenneth R. Rosen kennethrrosen@proton.me
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+set -o noglob
+
+### Configs
+
+# Colors
+PREFIX="$(tput setaf 7)$(tput bold)"
+YELLOW="$(tput setaf 3)$(tput bold)"
+POSTFIX="$(tput sgr0)"
+
+### End configs
+
+# Synopsis: usage
+usage() {
+    cat >&2 <<EOF
+Usage: ${0##*/} TEMPLATE [OPTIONS]...
+
+A script for upgrading Debian templates in Qubes OS.
+
+Arguments:
+  TEMPLATE            Name of the template to upgrade. Required.
+
+Options:
+  -h, --help          Display this help and exit.
+  -c, --clone         Clone the template before upgrading. Optional.
+  -o, --old-name      Old Debian release name (e.g., 'buster'). Required if upgrading.
+  -n, --new-name      New Debian release name (e.g., 'bullseye'). Required if upgrading.
+  -N, --new-template  New template name. Required if cloning.
+
+Examples:
+  ${0##*/} debian-10 --old-name=buster --new-name=bullseye
+  ${0##*/} debian-10 --clone --new-template=debian-11 --old-name=buster --new-name=bullseye
+
+EOF
+}
+
+# Process options
+while getopts ":hco:n:N:" opt; do
+    case ${opt} in
+        h )
+            usage
+            exit 0
+            ;;
+        c )
+            clone="y"
+            ;;
+        o )
+            old_name="${OPTARG}"
+            ;;
+        n )
+            new_name="${OPTARG}"
+            ;;
+        N )
+            new_template_name="${OPTARG}"
+            ;;
+        \? )
+            echo "Invalid Option: -$OPTARG" 1>&2
+            usage
+            exit 1
+            ;;
+        : )
+            echo "Invalid Option: -$OPTARG requires an argument" 1>&2
+            usage
+            exit 1
+            ;;
+    esac
+done
+shift $((OPTIND -1))
+
+# Check required parameters
+if [ $# -eq 0 ] || [[ -z "$old_name" ]] || [[ -z "$new_name" ]]; then
+    echo "Error: TEMPLATE, --old-name, and --new-name are required." >&2
+    usage
+    exit 1
+fi
+
+template=$1
+
+# Synopsis: message MESSAGE
+message() {
+    echo "${PREFIX}${1}${POSTFIX}"
+}
+
+# Synopsis: upgrade_template TEMPLATE CLONE OLD_NAME NEW_NAME NEW_TEMPLATE_NAME
+upgrade_template() {
+    local template=$1
+    local clone=$2
+    local old_name=$3
+    local new_name=$4
+    local new_template_name=$5
+    
+    if [[ "$clone" == "y" && -z "$new_template_name" ]]; then
+        message "Error: New template name required when cloning."
+        exit 1
+    elif [[ "$clone" == "y" ]]; then
+        message "Cloning $template to $new_template_name..."
+        if ! qvm-clone "$template" "$new_template_name"; then
+            message "Failed to clone template. Exiting."
+            exit 1
+        fi
+        template="$new_template_name"
+    fi
+
+    message "Upgrading $template from $old_name to $new_name..."
+    qvm-start "$template"
+    sleep 10  # Wait for the template to fully start
+
+    message "Updating APT repositories..."
+    qvm-run -p "$template" "sudo sed -i 's/$old_name/$new_name/g' /etc/apt/sources.list"
+    qvm-run -p "$template" "sudo sed -i 's/$old_name/$new_name/g' /etc/apt/sources.list.d/qubes-r4.list"
+
+    message "Performing upgrade..."
+    if ! qvm-run -p "$template" "sudo apt update && sudo apt full-upgrade -y"; then
+        message "APT upgrade failed on $template. Exiting."
+        exit 1
+    fi
+
+    if ! qvm-run -p "$template" "sudo apt autoremove -y && sudo apt clean"; then
+        message "APT cleanup failed on $template. Please check manually."
+        # Not exiting because this is not critical
+    fi
+
+    message "Trimming the new template..."
+    if ! qvm-run -p "$template" "sudo fstrim -av"; then
+        message "Trimming failed on $template. Please check manually."
+        # Not exiting because this is not critical
+    fi
+
+    message "Shutting down $template..."
+    if ! qvm-shutdown --wait "$template"; then
+        message "Failed to shutdown $template. Exiting."
+        exit 1
+    fi
+
+    message "Upgrade to $new_name completed successfully for $template."
+}
+
+# Initial checks for Qubes OS environment
+if ! type qvm-ls >/dev/null 2>&1; then
+    echo "This script is intended to run in a Qubes OS environment." >&2
+    exit 1
+fi
+
+# Execute the upgrade process
+if [ $# -gt 0 ]; then
+    template=$1
+    # Check if new_template_name was provided for cloning, otherwise use the original template name
+    if [[ "$clone" == "y" && -n "$new_template_name" ]]; then
+        upgrade_template "$template" "$clone" "$old_name" "$new_name" "$new_template_name"
+    elif [[ "$clone" != "y" ]]; then
+        upgrade_template "$template" "$clone" "$old_name" "$new_name" "$template"
+    else
+        echo "Error: --new-template is required when cloning."
+        usage
+        exit 1
+    fi
+else
+    echo "Error: No template specified."
+    usage
+    exit 1
+fi
+
