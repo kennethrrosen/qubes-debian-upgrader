@@ -2,6 +2,7 @@
 #
 # Qubes OS Debian Template Upgrade Script
 # Supports Debian 12 "Bookworm", Debian 13 "Trixie", and future releases
+# https://www.kennethrrosen.cloud
 #
 # Copyright (C) 2024 by Kenneth R. Rosen kennethrrosen@proton.me
 #
@@ -21,16 +22,10 @@
 
 set -o noglob
 
-### Configs
-
-# Colors
 PREFIX="$(tput setaf 7)$(tput bold)"
 YELLOW="$(tput setaf 3)$(tput bold)"
 POSTFIX="$(tput sgr0)"
 
-### End configs
-
-# Synopsis: usage
 usage() {
     cat >&2 <<EOF
 Usage: ${0##*/} TEMPLATE [OPTIONS]...
@@ -54,7 +49,6 @@ Examples:
 EOF
 }
 
-# Process options
 while getopts ":hco:n:N:" opt; do
     case ${opt} in
         h )
@@ -87,7 +81,6 @@ while getopts ":hco:n:N:" opt; do
 done
 shift $((OPTIND -1))
 
-# Check required parameters
 if [ $# -eq 0 ] || [[ -z "$old_name" ]] || [[ -z "$new_name" ]]; then
     echo "Error: TEMPLATE, --old-name, and --new-name are required." >&2
     usage
@@ -96,12 +89,10 @@ fi
 
 template=$1
 
-# Synopsis: message MESSAGE
 message() {
     echo "${PREFIX}${1}${POSTFIX}"
 }
 
-# Synopsis: upgrade_template TEMPLATE CLONE OLD_NAME NEW_NAME NEW_TEMPLATE_NAME
 upgrade_template() {
     local template=$1
     local clone=$2
@@ -123,7 +114,7 @@ upgrade_template() {
 
     message "Upgrading $template from $old_name to $new_name..."
     qvm-start "$template"
-    sleep 10  # Wait for the template to fully start
+    sleep 10
 
     message "Updating APT repositories..."
     qvm-run -p "$template" "sudo sed -i 's/$old_name/$new_name/g' /etc/apt/sources.list"
@@ -137,13 +128,11 @@ upgrade_template() {
 
     if ! qvm-run -p "$template" "sudo apt autoremove -y && sudo apt clean"; then
         message "APT cleanup failed on $template. Please check manually."
-        # Not exiting because this is not critical
     fi
 
     message "Trimming the new template..."
     if ! qvm-run -p "$template" "sudo fstrim -av"; then
         message "Trimming failed on $template. Please check manually."
-        # Not exiting because this is not critical
     fi
 
     message "Shutting down $template..."
@@ -155,20 +144,32 @@ upgrade_template() {
     message "Upgrade to $new_name completed successfully for $template."
 }
 
-# Initial checks for Qubes OS environment
+change_qvm_features() {
+    local template=$1
+    local new_template_name=$2
+    local version_number=${new_template_name##*-}
+    local six_months_later=$(date -d "+6 months" +%Y-%m-%d)
+
+    qvm-features $template name $new_template_name
+    qvm-features $template os-version $version_number
+    qvm-features $template template-summary "Qubes template for $new_template_name"
+    qvm-features $template template-description "Qubes template for $new_template_name"
+    qvm-features $template os-eol $six_months_later
+}
+
 if ! type qvm-ls >/dev/null 2>&1; then
     echo "This script is intended to run in a Qubes OS environment." >&2
     exit 1
 fi
 
-# Execute the upgrade process
 if [ $# -gt 0 ]; then
     template=$1
-    # Check if new_template_name was provided for cloning, otherwise use the original template name
     if [[ "$clone" == "y" && -n "$new_template_name" ]]; then
         upgrade_template "$template" "$clone" "$old_name" "$new_name" "$new_template_name"
+        change_qvm_features $template $new_template_name
     elif [[ "$clone" != "y" ]]; then
         upgrade_template "$template" "$clone" "$old_name" "$new_name" "$template"
+        change_qvm_features $template $template
     else
         echo "Error: --new-template is required when cloning."
         usage
@@ -179,4 +180,3 @@ else
     usage
     exit 1
 fi
-
