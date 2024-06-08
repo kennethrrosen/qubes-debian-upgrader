@@ -150,12 +150,11 @@ change_qvm_features() {
     local version_number=${new_template_name##*-}
     
 
-    qvm-features $template name $new_template_name
-    qvm-features $template os-version $version_number
-    qvm-features $template template-summary "Qubes template for $new_template_name"
-    qvm-features $template template-description "Qubes template for $new_template_name"
-    qvm-run -u root --service $new_template_name qubes.PostInstall
-
+    qvm-features "$template" name "$new_template_name"
+    qvm-features "$template" os-version "$version_number"
+    qvm-features "$template" template-summary "Qubes template for $new_template_name"
+    qvm-features "$template" template-description "Qubes template for $new_template_name"
+    qvm-run -u root --service "$new_template_name" qubes.PostInstall
 }
 
 if ! type qvm-ls >/dev/null 2>&1; then
@@ -167,10 +166,10 @@ if [ $# -gt 0 ]; then
     template=$1
     if [[ "$clone" == "y" && -n "$new_template_name" ]]; then
         upgrade_template "$template" "$clone" "$old_name" "$new_name" "$new_template_name"
-        change_qvm_features $template $new_template_name
+        change_qvm_features "$new_template_name" "$new_template_name"
     elif [[ "$clone" != "y" ]]; then
         upgrade_template "$template" "$clone" "$old_name" "$new_name" "$template"
-        change_qvm_features $template $template
+        change_qvm_features "$template" "$template"
     else
         echo "Error: --new-template is required when cloning."
         usage
@@ -180,4 +179,5 @@ else
     echo "Error: No template specified."
     usage
     exit 1
+fi
 fi
